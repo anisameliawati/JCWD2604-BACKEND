@@ -7,49 +7,56 @@ import { NavbarAdminComponent } from "@/components/navbar";
 import Search from "@/assets/search.png";
 import { useFormik } from "formik";
 import { axiosInstance } from "@/axios/axios";
+import AdminProductCard from "@/components/admin/adminCard";
+import { useDebounce } from "use-debounce";
 
 /** @format */
 function Page() {
   const [search, setSearch] = useState("");
+  const [value] = useDebounce(search, 500);
+  const token = localStorage.getItem("user");
+
   const [products, setProducts] = useState([]);
   const initalProduct = {
-    productName: "",
+    product_name: "",
     price: 0,
-    productDescription: "",
-    img: "",
+    description: "",
+    image_url: "",
+    image: null,
     id: 0,
   };
 
   const formik = useFormik({
     initialValues: initalProduct,
     onSubmit: () => {
+      console.log("test");
       save();
     },
   });
 
-  const edit2 = (product) => {
-    formik.setFieldValue("id", product.id);
-    formik.setFieldValue("productName", product.productName);
-    formik.setFieldValue("img", product.img);
-    formik.setFieldValue("price", product.price);
-    formik.setFieldValue("productDescription", product.productDescription);
-  };
-
   const edit = async (id) => {
     const res = await axiosInstance().get("/products/" + id);
-    const product = res.data;
+    const product = res.data.result;
     formik.setFieldValue("id", product.id);
-    formik.setFieldValue("productName", product.productName);
-    formik.setFieldValue("img", product.img);
-    formik.setFieldValue("price", product.price);
-    formik.setFieldValue("productDescription", product.productDescription);
-  };
+    formik.setFieldValue("product_name", product.product_name);
+    formik.setFieldValue("image_url", product.image_url);
 
+    formik.setFieldValue("price", product.price);
+    formik.setFieldValue("description", product.description);
+  };
   const save = () => {
     console.log(formik.values);
+
+    const form = new FormData();
+    form.append("product_name", formik.values.product_name);
+    form.append("image_url", formik.values.image_url);
+    form.append("image", formik.values.image);
+    form.append("price", formik.values.price);
+    form.append("description", formik.values.description);
+
     if (formik.values.id) {
       axiosInstance()
-        .patch("/products/" + formik.values.id, formik.values)
+        .patch("/products/" + formik.values.id, form)
         .then(() => {
           alert("data berhasil diedit");
           fetchProducts();
@@ -59,10 +66,8 @@ function Page() {
         });
     } else {
       axiosInstance();
-      const newProduct = { ...formik.values };
-      delete newProduct.id;
       axiosInstance()
-        .post("/products/", newProduct)
+        .post("/products/", form)
         .then(() => {
           alert("data berhasil ditambahkan");
           fetchProducts();
@@ -77,7 +82,11 @@ function Page() {
   const hapus = (id) => {
     if (window.confirm("apakah anda yakin menghapus product id " + id + "?"))
       axiosInstance()
-        .delete("/products/" + id)
+        .delete("/products/" + id, {
+          headers: {
+            Authorization: token,
+          },
+        })
         .then(() => {
           alert(`id ${id} berhasil dihapus`);
           fetchProducts();
@@ -89,17 +98,27 @@ function Page() {
     axiosInstance()
       .get("/products/", {
         params: {
-          productName_like: search,
+          product_name: search,
         },
       })
       .then((res) => {
-        setProducts(res.data);
+        setProducts(res.data.result);
       })
       .catch((err) => console.log(err));
   };
+
+  const renderFile = (e) => {
+    console.log(e.target.files[0]);
+    formik.setFieldValue("image", e.target.files[0]);
+    // formik.setFieldValue(
+    //   "image_url",
+    //   window.URL.createObjectURL(e.target.files[0])
+    // );
+  };
+
   useEffect(() => {
     fetchProducts();
-  }, [search]);
+  }, [value]);
 
   const upload = useRef(null);
   return (
@@ -149,8 +168,8 @@ function Page() {
                         placeholder="Product Name"
                         className="border p-1  w-96 "
                         required
-                        id="productName"
-                        value={formik.values.productName}
+                        id="product_name"
+                        value={formik.values.product_name}
                         onChange={formik.handleChange}
                       />
                     </td>
@@ -163,9 +182,8 @@ function Page() {
                         placeholder="Image URL"
                         className="border p-1  w-96 hidden"
                         required
-                        id="img"
-                        // value={formik.values.img}
-                        // onChange={formik.handleChange}
+                        id="image_url"
+                        onChange={(e) => renderFile(e)}
                         ref={upload}
                       />
                       <button
@@ -203,8 +221,8 @@ function Page() {
                         placeholder="Description"
                         className="border p-1 w-96"
                         required
-                        value={formik.values.productDescription}
-                        id="productDescription"
+                        value={formik.values.description}
+                        id="description"
                         onChange={formik.handleChange}
                       />
                     </td>
