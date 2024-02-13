@@ -2,6 +2,7 @@
 import { Response, Request, NextFunction } from "express";
 import { prisma, secretKey } from ".."; //accessing model
 import { Prisma } from "@prisma/client"; // accessing interface/types
+import { ReqUser } from "../middlewares/auth-middleware";
 
 import { genSalt, hash, compare } from "bcrypt";
 import { sign, verify } from "jsonwebtoken";
@@ -43,6 +44,24 @@ export const userController = {
       await prisma.user.create({
         data: newUser,
       });
+
+      const token = sign({ email }, secretKey, {
+        expiresIn: "1hr",
+      });
+
+      const rendered = mustache.render(template, {
+        email,
+        fullname: first_name + " " + last_name,
+        verify_url: process.env.verifyURL + token,
+      });
+
+      mailer({
+        to: email,
+        subject: "Verify Account",
+        text: "",
+        html: rendered,
+      });
+
       res.send({
         success: true,
         message: "berhasil register",
@@ -165,6 +184,28 @@ export const userController = {
 
       res.send({
         message: "email berhasil dikirim",
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+  async verifyEmail(req: ReqUser, res: Response, next: NextFunction) {
+    try {
+      const { user } = req;
+      const verif: Prisma.UserUpdateInput = {
+        isVerified: true,
+      };
+      if (user?.isVerified) throw Error("user already verified");
+      await prisma.user.update({
+        data: verif,
+        where: {
+          id: user?.id,
+        },
+      });
+      console.log("aman");
+
+      res.send({
+        message: "success",
       });
     } catch (error) {
       next(error);
