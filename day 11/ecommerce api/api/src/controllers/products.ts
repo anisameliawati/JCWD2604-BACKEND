@@ -1,7 +1,7 @@
 /** @format */
 
 import { Response, Request, NextFunction } from "express";
-import { prisma } from "..";
+import { prisma, client } from "..";
 import { Prisma } from "@prisma/client";
 import { ReqUser } from "../middlewares/auth-middleware";
 
@@ -9,27 +9,46 @@ export const productController = {
   async getProducts(req: Request, res: Response, next: NextFunction) {
     try {
       const { product_name } = req.query;
-      const products = await prisma.product.findMany({
-        include: {
-          user: {
-            select: {
-              id: true,
-              email: true,
-              first_name: true,
-              last_name: true,
+
+      let products;
+
+      const cachedData = 0;
+
+      if (client.status != "end")
+        await client.get(String(product_name)).catch((err) => {
+          return 0;
+        });
+
+      if (!cachedData) {
+        products = await prisma.product.findMany({
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                first_name: true,
+                last_name: true,
+              },
             },
           },
-        },
-        where: {
-          product_name: {
-            contains: String(product_name),
+          where: {
+            product_name: {
+              contains: String(product_name),
+            },
           },
-        },
-      });
+        });
+        if (client.status != "end")
+          await client.set(
+            String(product_name),
+            JSON.stringify(products),
+            "EX",
+            10
+          );
+      }
 
       res.send({
         success: true,
-        result: products,
+        result: JSON.parse(String(cachedData)) || products,
       });
     } catch (error) {
       next(error);
@@ -45,6 +64,14 @@ export const productController = {
               email: true,
               first_name: true,
               last_name: true,
+            },
+          },
+          stock: {
+            select: {
+              stock_qty: true,
+            },
+            where: {
+              status: "Available",
             },
           },
         },
